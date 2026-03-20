@@ -388,23 +388,55 @@ function buildCurTable(){
 }
 
 // ══ 設定テーブル ══
+
+// localStorageから設定値を読む（なければデフォルト）
+function getMinVal(c, d){
+  try{
+    const s = lsGet(SETTINGS_STORE);
+    if(s){ const data=JSON.parse(s); if(data.days?.[c]?.[d]!==undefined) return data.days[c][d]; }
+  }catch(e){}
+  return DEF_DAY[c][d];
+}
+function getHolVal(c){
+  try{
+    const s = lsGet(SETTINGS_STORE);
+    if(s){ const data=JSON.parse(s); if(data.holiday?.[c]!==undefined) return data.holiday[c]; }
+  }catch(e){}
+  return DEF_HOL[c];
+}
+
+// 設定テーブルの現在値をlocalStorageに保存
+function saveMinSettings(){
+  const data = { days:{}, holiday:{} };
+  COINS.forEach(c=>{
+    data.days[c]={};
+    for(let d=0;d<7;d++){ const el=document.getElementById(`n${c}d${d}`); data.days[c][d]=el?+el.value:DEF_DAY[c][d]; }
+    const hEl=document.getElementById(`h${c}`); data.holiday[c]=hEl?+hEl.value:DEF_HOL[c];
+  });
+  lsSet(SETTINGS_STORE, JSON.stringify(data));
+}
+
 function buildMinTable(){
   document.getElementById('minThead').innerHTML=`<tr><th>曜日</th>${coinThs()}</tr>`;
   const tb=document.getElementById('minTbody'); tb.innerHTML='';
   DAY_ORDER.forEach(d=>{
     const tr=document.createElement('tr');
     let h=`<td>${DAY_LABEL[d]}曜日</td>`;
-    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${DEF_DAY[c][d]}" inputmode="numeric"></td>`; });
+    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${getMinVal(c,d)}" inputmode="numeric"></td>`; });
     tr.innerHTML=h; tb.appendChild(tr);
   });
+  // 変更のたびに自動保存
+  tb.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
 }
 function buildHolTable(){
   document.getElementById('holThead').innerHTML=`<tr><th></th>${coinThs()}</tr>`;
   const tb=document.getElementById('holTbody'); tb.innerHTML='';
   const tr=document.createElement('tr');
   let h=`<td>休日</td>`;
-  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${DEF_HOL[c]}" inputmode="numeric"></td>`; });
+  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${getHolVal(c)}" inputmode="numeric"></td>`; });
   tr.innerHTML=h; tb.appendChild(tr);
+  // 変更のたびに自動保存
+  tr.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
 }
 
 // ══ 号機名入力欄 ══
@@ -470,6 +502,7 @@ function importSettings(e){
         lsSet(MACH_NAME_STORE,JSON.stringify(data.machNames));
         buildMachNames(); buildCurTable();
       }
+      saveMinSettings(); // インポート後も即保存
       alert('設定をインポートしました。');
     }catch(err){ alert('インポートに失敗しました: '+err.message); }
     e.target.value='';
