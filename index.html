@@ -16,7 +16,7 @@
   --hdr:#1a2340; --accent:#1a5fd4; --ok:#1a7a45; --ok-bg:#e6f4ec;
   --danger:#c0192b; --danger-bg:#fdecea; --amber:#b45309; --amber-bg:#fef3c7;
   --blue-bg:#eff6ff; --text:#111827; --text2:#374151; --muted:#6b7280;
-  --hol:#7c3aed; --hol-bg:#f3f0ff;
+  --hol:#c0192b; --hol-bg:#fdecea;
   --sans:'Noto Sans JP',sans-serif; --mono:'DM Mono','SF Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -26,8 +26,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:1
 header{background:var(--hdr);box-shadow:0 2px 6px rgba(0,0,0,.18);position:sticky;top:0;z-index:200;}
 .hdr-top{padding:12px 16px;display:flex;align-items:center;gap:10px;}
 header h1{font-size:15px;font-weight:700;color:#fff;}
-.hdr-badge{margin-left:auto;font-family:var(--mono);font-size:11px;font-weight:500;padding:4px 10px;border-radius:5px;background:#f5c518;color:#000;white-space:nowrap;transition:background .2s,color .2s;}
-.hdr-badge.hol{background:var(--hol);color:#fff;}
+.hdr-badge{margin-left:auto;font-family:var(--mono);font-size:15px;font-weight:700;padding:5px 13px;border-radius:6px;background:#f5c518;color:#000;white-space:nowrap;transition:background .2s,color .2s;}
+.hdr-badge.hol{background:var(--danger);color:#fff;}
 .tab-bar{display:flex;border-top:1px solid rgba(255,255,255,.12);}
 .tab-btn{flex:1;padding:9px 4px;background:none;border:none;color:rgba(255,255,255,.5);font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;text-align:center;border-bottom:3px solid transparent;transition:color .15s,border-color .15s;}
 .tab-btn.active{color:#fff;border-bottom-color:#f5c518;}
@@ -214,7 +214,7 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
 
   <!-- 一括スキャンボタン -->
   <div class="scan-btn" id="scanBtn">
-    📷 一覧表を撮影して全台読み取り
+    📷 カメラで読み取り
     <input type="file" id="scanInput" accept="image/*" capture="environment">
   </div>
 
@@ -562,6 +562,26 @@ document.getElementById('scanInput').addEventListener('change', e=>{
   openOcr(file); e.target.value='';
 });
 
+// 画像をCanvasで圧縮してBase64を返す（最大辺1600px・JPEG品質0.82）
+function compressImage(dataUrl, maxSize=1600, quality=0.82){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      if(w>maxSize||h>maxSize){
+        if(w>h){ h=Math.round(h*maxSize/w); w=maxSize; }
+        else   { w=Math.round(w*maxSize/h); h=maxSize; }
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=w; canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      const compressed=canvas.toDataURL('image/jpeg', quality);
+      resolve(compressed);
+    };
+    img.src=dataUrl;
+  });
+}
+
 function openOcr(file){
   ocrValues={};
   const overlay=document.getElementById('ocrOverlay');
@@ -571,12 +591,15 @@ function openOcr(file){
   document.getElementById('ocrResultWrap').style.display='none';
   document.getElementById('ocrApply').disabled=true;
   spinner.classList.add('on');
-  status.textContent='AIが画像を解析しています...';
+  status.textContent='画像を処理しています...';
   overlay.classList.add('show');
   const reader=new FileReader();
   reader.onload=async ev=>{
-    preview.src=ev.target.result;
-    await runOcr(ev.target.result.split(',')[1], file.type||'image/jpeg');
+    // まず圧縮してからプレビューとAPIに使う
+    const compressed = await compressImage(ev.target.result);
+    preview.src=compressed;
+    status.textContent='AIが画像を解析しています...';
+    await runOcr(compressed.split(',')[1], 'image/jpeg');
   };
   reader.readAsDataURL(file);
 }
