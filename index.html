@@ -384,7 +384,7 @@ function isMachEnabled(m){ return getMachEnabled()[m]; }
 
 // ══ 現在枚数テーブル ══
 function buildCurTable(){
-  const names = getMachNames();
+  const names   = getMachNames();
   const enabled = getMachEnabled();
   document.getElementById('curThead').innerHTML =
     `<tr><th class="toggle-hd"></th><th>号機</th>${coinThs()}</tr>`;
@@ -403,14 +403,22 @@ function buildCurTable(){
     });
     tr.innerHTML = h; tb.appendChild(tr);
   }
-  // トグルクリック
+  // トグルクリック：再描画せずスタイルのみ切り替え
   tb.querySelectorAll('.mach-toggle').forEach(btn=>{
     btn.addEventListener('click',()=>{
-      const m = +btn.dataset.m;
+      const m   = +btn.dataset.m;
       const arr = getMachEnabled();
-      arr[m] = !arr[m];
+      arr[m]    = !arr[m];
       saveMachEnabled(arr);
-      buildCurTable(); // 再描画
+      // ボタンとその行の見た目だけ更新（入力値は保持）
+      btn.textContent = arr[m] ? '✓' : '−';
+      btn.classList.toggle('off', !arr[m]);
+      const row = btn.closest('tr');
+      row.classList.toggle('mach-off', !arr[m]);
+      row.querySelectorAll('input').forEach(inp=>{
+        if(arr[m]) inp.removeAttribute('tabindex');
+        else inp.setAttribute('tabindex','-1');
+      });
     });
   });
   // 入力イベント
