@@ -147,6 +147,16 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
 
 /* 設定ページ */
 .settings-note{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.6;}
+/* 号機ON/OFFトグル */
+.mach-toggle{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;border:2px solid var(--ok);background:var(--ok-bg);color:var(--ok);font-size:13px;font-weight:700;cursor:pointer;user-select:none;flex-shrink:0;transition:all .15s;}
+.mach-toggle.off{border-color:var(--border2);background:#f0f2f6;color:var(--muted);}
+#curCard thead th.toggle-hd{width:34px;border-right:2px solid var(--border2);}
+#curCard tbody td.toggle-cell{border-right:2px solid var(--border2);background:#f0f2f6;padding:0;text-align:center;vertical-align:middle;}
+#curCard tbody tr.mach-off{opacity:.32;}
+#curCard tbody tr.mach-off input{pointer-events:none;}
+/* 本数行 */
+.card table tbody tr.roll-row td{background:#f0f2f6;font-size:13px;font-weight:700;color:var(--text2);border-top:1px dashed var(--border2);}
+.card table tbody tr.roll-row td.roll-cell{color:var(--accent);font-family:var(--mono);}
 .io-row{display:flex;gap:8px;margin-top:14px;}
 .io-btn{flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;text-align:center;background:var(--white);color:var(--text2);transition:all .15s;}
 .io-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--blue-bg);}
@@ -363,23 +373,47 @@ function coinThs(extras){
     (extras||[]).map(e=>`<th class="${e.cls||''}">${e.label}</th>`).join('');
 }
 
+// ══ 号機ON/OFF ══
+const MACH_ENABLED_STORE = 'coin_mach_enabled';
+function getMachEnabled(){
+  try{ const s=lsGet(MACH_ENABLED_STORE); if(s){ const a=JSON.parse(s); if(a.length===MACH) return a; } }catch(e){}
+  return Array(MACH).fill(true);
+}
+function saveMachEnabled(arr){ lsSet(MACH_ENABLED_STORE, JSON.stringify(arr)); }
+function isMachEnabled(m){ return getMachEnabled()[m]; }
+
 // ══ 現在枚数テーブル ══
 function buildCurTable(){
   const names = getMachNames();
+  const enabled = getMachEnabled();
   document.getElementById('curThead').innerHTML =
-    `<tr><th>号機</th>${coinThs()}</tr>`;
+    `<tr><th class="toggle-hd"></th><th>号機</th>${coinThs()}</tr>`;
   const tb = document.getElementById('curTbody');
   tb.innerHTML = '';
   for(let m=0;m<MACH;m++){
     const tr = document.createElement('tr');
-    let h = `<td class="mach-lbl">${names[m]}</td>`;
+    if(!enabled[m]) tr.classList.add('mach-off');
+    let h = `<td class="toggle-cell"><span class="mach-toggle${enabled[m]?'':' off'}" data-m="${m}">${enabled[m]?'✓':'−'}</span></td>`;
+    h += `<td class="mach-lbl">${names[m]}</td>`;
     COINS.forEach(c=>{
       h += `<td><input class="cur-inp zero" type="text" inputmode="numeric"
         pattern="[0-9]*" id="c${c}m${m}" value="0" maxlength="3"
-        autocomplete="off" autocorrect="off" spellcheck="false"></td>`;
+        autocomplete="off" autocorrect="off" spellcheck="false"
+        ${enabled[m]?'':'tabindex="-1"'}></td>`;
     });
     tr.innerHTML = h; tb.appendChild(tr);
   }
+  // トグルクリック
+  tb.querySelectorAll('.mach-toggle').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const m = +btn.dataset.m;
+      const arr = getMachEnabled();
+      arr[m] = !arr[m];
+      saveMachEnabled(arr);
+      buildCurTable(); // 再描画
+    });
+  });
+  // 入力イベント
   document.querySelectorAll('.cur-inp').forEach(inp=>{
     inp.addEventListener('focus',()=>{ if(inp.value==='0') inp.value=''; inp.classList.remove('zero'); inp.select(); });
     inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/[^0-9]/g,''); if(inp.value.length>3) inp.value=inp.value.slice(0,3); if(+inp.value>999) inp.value='999'; });
@@ -461,12 +495,24 @@ function setDay(d){ selDay=d; document.querySelectorAll('.day-btn').forEach(b=>b
 function updateBadge(){ const el=document.getElementById('hdrBadge'); el.textContent=DAY_LABEL[selDay]+'曜日'+(isHoliday?'（休日）':''); el.classList.toggle('hol',isHoliday); }
 
 // ══ APIキー ══
-function getApiKey(){ return lsGet(API_KEY_STORE)||''; }
+// ▼ ここにAPIキーを直接書くと、localStorageが消えても使えます
+const HARDCODED_API_KEY = '';
+// ▲ 例: const HARDCODED_API_KEY = 'sk-ant-api03-xxxxxxxx...';
+
+function getApiKey(){
+  // 優先順位: localStorage → コード内の固定値
+  return lsGet(API_KEY_STORE) || HARDCODED_API_KEY || '';
+}
 function initApiKeyUI(){
   const input=document.getElementById('apiKeyInput');
   const status=document.getElementById('apiKeyStatus');
-  const key=getApiKey();
-  if(key){ input.value=key; status.textContent='✓ APIキーが保存されています'; status.style.color='var(--ok)'; }
+  const lsKey = lsGet(API_KEY_STORE)||'';
+  if(lsKey){
+    input.value=lsKey;
+    status.textContent='✓ APIキーが保存されています'; status.style.color='var(--ok)';
+  } else if(HARDCODED_API_KEY){
+    status.textContent='✓ コード内のAPIキーを使用中'; status.style.color='var(--ok)';
+  }
   document.getElementById('apiKeySaveBtn').addEventListener('click',()=>{
     const val=input.value.trim();
     if(!val.startsWith('sk-ant-')){ status.textContent='⚠ sk-ant- で始まるキーを入力してください'; status.style.color='var(--danger)'; return; }
@@ -640,35 +686,44 @@ function reqVal(c){
 
 // ══ 計算 ══
 function calculate(){
-  const names=getMachNames();
+  const names   = getMachNames();
+  const enabled = getMachEnabled();
+  // 有効な台のインデックス一覧
+  const activeMachs = [...Array(MACH)].map((_,i)=>i).filter(i=>enabled[i]);
+  const activeMach  = activeMachs.length;
+
   const cur={},req={},sh={},add={};
   COINS.forEach(c=>{
     cur[c]=[...Array(MACH)].map((_,m)=>curVal(c,m));
     req[c]=reqVal(c);
-    sh[c]=cur[c].map(v=>Math.max(0,req[c]-v));
-    add[c]=sh[c].map(v=>ceil10(v));
+    sh[c]=cur[c].map((v,m)=>enabled[m]?Math.max(0,req[c]-v):0);
+    add[c]=sh[c].map((v,m)=>enabled[m]?ceil10(v):0);
   });
+  // 50の倍数調整（有効台のみ対象）
   COINS.forEach(c=>{
-    let tot=add[c].reduce((a,b)=>a+b,0);
+    let tot=activeMachs.reduce((s,m)=>s+add[c][m],0);
     const rem=tot%50; if(rem===0) return;
     let need=50-rem;
-    const ord=[...Array(MACH)].map((_,i)=>i).sort((a,b)=>sh[c][b]-sh[c][a]);
-    let i=0; while(need>0){add[c][ord[i%MACH]]+=10;need-=10;i++;}
+    const ord=[...activeMachs].sort((a,b)=>sh[c][b]-sh[c][a]);
+    let i=0; while(need>0){add[c][ord[i%activeMach]]+=10;need-=10;i++;}
   });
   const after={};
-  COINS.forEach(c=>{after[c]=cur[c].map((v,m)=>v+add[c][m]);});
+  COINS.forEach(c=>{after[c]=cur[c].map((v,m)=>enabled[m]?v+add[c][m]:v);});
 
   const addMt=Array(MACH).fill(0),addCt={},afterMt=Array(MACH).fill(0),afterAmt=Array(MACH).fill(0),addAmt=Array(MACH).fill(0);
   COINS.forEach(c=>{
     addCt[c]=0;
     for(let m=0;m<MACH;m++){
+      if(!enabled[m]) continue;
       addMt[m]+=add[c][m]; addCt[c]+=add[c][m];
       afterMt[m]+=after[c][m]; afterAmt[m]+=after[c][m]*c; addAmt[m]+=add[c][m]*c;
     }
   });
-  const grandAdd=addMt.reduce((a,b)=>a+b,0),grandAfter=afterMt.reduce((a,b)=>a+b,0);
-  const grandAmt=afterAmt.reduce((a,b)=>a+b,0),grandAddAmt=addAmt.reduce((a,b)=>a+b,0);
-  const ok50=COINS.every(c=>addCt[c]%50===0),ok10=COINS.every(c=>add[c].every(v=>v%10===0));
+  const grandAdd=activeMachs.reduce((s,m)=>s+addMt[m],0);
+  const grandAfter=activeMachs.reduce((s,m)=>s+afterMt[m],0);
+  const grandAmt=activeMachs.reduce((s,m)=>s+afterAmt[m],0);
+  const grandAddAmt=activeMachs.reduce((s,m)=>s+addAmt[m],0);
+  const ok50=COINS.every(c=>addCt[c]%50===0),ok10=COINS.every(c=>activeMachs.every(m=>add[c][m]%10===0));
 
   document.getElementById('badges').innerHTML=
     [{ok:ok50,lbl:`硬貨ごと全台合計が50の倍数 ${ok50?'✓ OK':'✗ NG'}`},
@@ -692,6 +747,7 @@ function calculate(){
   document.getElementById('addThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'補充金額'}]);
   const addBody=document.getElementById('addTbody'); addBody.innerHTML='';
   for(let m=0;m<MACH;m++){
+    if(!enabled[m]) continue;
     addBody.appendChild(mkRow(names[m],
       COINS.map(c=>{const v=add[c][m];return `<td class="${v>0?'c-add':'c-zero'}">${v>0?'+'+fmt(v):'—'}</td>`;}).join(''),
       `<td style="font-weight:700;">${fmt(addMt[m])}</td><td class="c-amt">¥${fmt(addAmt[m])}</td>`));
@@ -700,16 +756,26 @@ function calculate(){
   addTr.innerHTML=`<td>全台合計</td>`+COINS.map(c=>{const ok=addCt[c]%50===0;return `<td class="${ok?'c-ok50':'c-ng50'}">${fmt(addCt[c])}${ok?' ✓':''}</td>`;}).join('')+`<td>${fmt(grandAdd)}</td><td class="c-amt">¥${fmt(grandAddAmt)}</td>`;
   addBody.appendChild(addTr);
 
+  // 本数行（全台合計÷50）
+  const rollTr=document.createElement('tr'); rollTr.className='roll-row';
+  rollTr.innerHTML=`<td>必要本数</td>`+
+    COINS.map(c=>{
+      const rolls=addCt[c]/50;
+      return `<td class="roll-cell">${rolls>0?rolls+'本':'—'}</td>`;
+    }).join('')+`<td class="roll-cell">&nbsp;</td><td class="roll-cell">&nbsp;</td>`;
+  addBody.appendChild(rollTr);
+
   // 補充後
   document.getElementById('afterThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'合計金額'}]);
   const afterBody=document.getElementById('afterTbody'); afterBody.innerHTML='';
   for(let m=0;m<MACH;m++){
+    if(!enabled[m]) continue;
     afterBody.appendChild(mkRow(names[m],
       COINS.map(c=>`<td>${fmt(after[c][m])}</td>`).join(''),
       `<td style="font-weight:700;">${fmt(afterMt[m])}</td><td class="c-amt">¥${fmt(afterAmt[m])}</td>`));
   }
   const aftTr=document.createElement('tr'); aftTr.className='total-row';
-  aftTr.innerHTML=`<td>全台合計</td>`+COINS.map(c=>{const t=after[c].reduce((a,b)=>a+b,0);return `<td>${fmt(t)}</td>`;}).join('')+`<td>${fmt(grandAfter)}</td><td class="c-amt">¥${fmt(grandAmt)}</td>`;
+  aftTr.innerHTML=`<td>全台合計</td>`+COINS.map(c=>{const t=activeMachs.reduce((s,m)=>s+after[c][m],0);return `<td>${fmt(t)}</td>`;}).join('')+`<td>${fmt(grandAfter)}</td><td class="c-amt">¥${fmt(grandAmt)}</td>`;
   afterBody.appendChild(aftTr);
 
   document.getElementById('result').style.display='block';
