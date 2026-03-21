@@ -345,8 +345,10 @@ function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
 
 function getMachNames(){
-  const s = lsGet(MACH_NAME_STORE);
-  if(s){ try{ const a=JSON.parse(s); if(a.length===MACH) return a; }catch(e){} }
+  try{
+    const s=lsGet(MACH_NAME_STORE);
+    if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length===MACH) return a; }
+  }catch(e){ lsSet(MACH_NAME_STORE,null); }
   return [...DEF_MACH_NAMES];
 }
 function saveMachNames(){
@@ -376,7 +378,10 @@ function coinThs(extras){
 // ══ 号機ON/OFF ══
 const MACH_ENABLED_STORE = 'coin_mach_enabled';
 function getMachEnabled(){
-  try{ const s=lsGet(MACH_ENABLED_STORE); if(s){ const a=JSON.parse(s); if(a.length===MACH) return a; } }catch(e){}
+  try{
+    const s=lsGet(MACH_ENABLED_STORE);
+    if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length===MACH) return a; }
+  }catch(e){ lsSet(MACH_ENABLED_STORE,null); } // 破損時クリア
   return Array(MACH).fill(true);
 }
 function saveMachEnabled(arr){ lsSet(MACH_ENABLED_STORE, JSON.stringify(arr)); }
@@ -396,8 +401,8 @@ function buildCurTable(){
     let h = `<td class="toggle-cell"><span class="mach-toggle${enabled[m]?'':' off'}" data-m="${m}">${enabled[m]?'✓':'−'}</span></td>`;
     h += `<td class="mach-lbl">${names[m]}</td>`;
     COINS.forEach(c=>{
-      h += `<td><input class="cur-inp zero" type="text" inputmode="numeric"
-        pattern="[0-9]*" id="c${c}m${m}" value="0" maxlength="3"
+      h += `<td><input class="cur-inp zero" type="number" inputmode="numeric"
+        id="c${c}m${m}" value="0" min="0" max="999"
         autocomplete="off" autocorrect="off" spellcheck="false"
         ${enabled[m]?'':'tabindex="-1"'}></td>`;
     });
@@ -410,21 +415,40 @@ function buildCurTable(){
       const arr = getMachEnabled();
       arr[m]    = !arr[m];
       saveMachEnabled(arr);
-      // ボタンとその行の見た目だけ更新（入力値は保持）
+      // ボタンとその行の見た目だけ更新（入力値は保持/クリア）
       btn.textContent = arr[m] ? '✓' : '−';
       btn.classList.toggle('off', !arr[m]);
       const row = btn.closest('tr');
       row.classList.toggle('mach-off', !arr[m]);
       row.querySelectorAll('input').forEach(inp=>{
-        if(arr[m]) inp.removeAttribute('tabindex');
-        else inp.setAttribute('tabindex','-1');
+        if(arr[m]){
+          inp.removeAttribute('tabindex');
+        } else {
+          inp.setAttribute('tabindex','-1');
+          // OFFにした台の入力値をゼロクリア（意図しない計算を防ぐ）
+          inp.value = '0';
+          inp.classList.add('zero');
+        }
       });
+      // ⑨ 全台OFFなら計算ボタン無効化
+      const anyOn = arr.some(Boolean);
+      const cb = document.getElementById('calcBtn');
+      cb.disabled = !anyOn;
+      cb.style.opacity = anyOn ? '' : '0.45';
     });
   });
   // 入力イベント
   document.querySelectorAll('.cur-inp').forEach(inp=>{
     inp.addEventListener('focus',()=>{ if(inp.value==='0') inp.value=''; inp.classList.remove('zero'); inp.select(); });
-    inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/[^0-9]/g,''); if(inp.value.length>3) inp.value=inp.value.slice(0,3); if(+inp.value>999) inp.value='999'; });
+    inp.addEventListener('input',()=>{
+      inp.value=inp.value.replace(/[^0-9]/g,'');
+      if(inp.value!=='' && +inp.value>999) inp.value='999';
+    });
+    inp.addEventListener('paste',e=>{
+      e.preventDefault();
+      const t=(e.clipboardData||window.clipboardData).getData('text').replace(/[^0-9]/g,'');
+      inp.value=t?String(Math.min(999,+t)):'';
+    });
     inp.addEventListener('blur',()=>{ if(!inp.value||isNaN(+inp.value)) inp.value='0'; inp.classList.toggle('zero',inp.value==='0'); });
   });
 }
@@ -492,9 +516,14 @@ function buildMachNames(){
     div.innerHTML = `<label>No.${i+1}</label><input type="text" id="machName${i}" value="${name}" maxlength="8">`;
     wrap.appendChild(div);
   });
-  // 変更時に即保存＆テーブル更新
-  document.querySelectorAll('.mach-name-item input').forEach(inp=>{
-    inp.addEventListener('change',()=>{ saveMachNames(); buildCurTable(); });
+  // 変更時に即保存＆ラベルのみ更新（入力値を失わないよう再描画しない）
+  document.querySelectorAll('.mach-name-item input').forEach((inp, i)=>{
+    inp.addEventListener('change',()=>{
+      saveMachNames();
+      // 現在枚数テーブルの号機名ラベルだけ更新
+      const lbl = document.querySelector(`#curTbody tr:nth-child(${i+1}) td.mach-lbl`);
+      if(lbl) lbl.textContent = inp.value.trim() || DEF_MACH_NAMES[i];
+    });
   });
 }
 
@@ -648,10 +677,23 @@ async function runOcr(b64, mime){
         ]}]
       })
     });
+    // ② res.ok チェック
+    if(!res.ok){
+      let msg=`HTTPエラー: ${res.status}`;
+      try{ const e=await res.json(); if(e?.error?.message) msg=e.error.message; }catch(_){}
+      throw new Error(msg);
+    }
     const data=await res.json();
     if(data.error) throw new Error(data.error.message);
     const text=(data.content||[]).map(b=>b.type==='text'?b.text:'').join('');
-    const json=JSON.parse(text.replace(/```[a-z]*|```/g,'').trim().match(/\{[\s\S]*\}/)[0]);
+    // ① JSON パース防御
+    let json=null;
+    try{
+      const cleaned=text.replace(/```[a-z]*|```/g,'').trim();
+      const match=cleaned.match(/\{[\s\S]*\}/);
+      if(!match) throw new Error('JSONが見つかりません（応答: '+cleaned.slice(0,80)+'）');
+      json=JSON.parse(match[0]);
+    }catch(pe){ throw new Error('JSON解析失敗: '+pe.message); }
 
     // 結果テーブルを構築
     const machines=json.machines||[];
@@ -666,7 +708,8 @@ async function runOcr(b64, mime){
       const tr=document.createElement('tr');
       let h=`<td>${names[m]}</td>`;
       COINS.forEach(c=>{
-        const val=(mdata[String(c)]!==null&&mdata[String(c)]!==undefined)?Math.min(999,Math.max(0,parseInt(mdata[String(c)])||0)):0;
+        const raw=mdata[String(c)]; const parsed=Number(raw);
+        const val=Number.isFinite(parsed)&&parsed>=0 ? Math.min(999,Math.floor(parsed)) : 0;
         ocrValues[m][c]=val;
         h+=`<td><input type="text" inputmode="numeric" maxlength="3" id="ocr_${m}_${c}" value="${val}"></td>`;
       });
@@ -675,7 +718,10 @@ async function runOcr(b64, mime){
     // 入力変更でocrValues同期
     for(let m=0;m<MACH;m++) COINS.forEach(c=>{
       const el=document.getElementById(`ocr_${m}_${c}`);
-      if(el) el.addEventListener('input',e=>{ ocrValues[m][c]=Math.min(999,parseInt(e.target.value.replace(/[^0-9]/g,''))||0); });
+      if(el) el.addEventListener('input',e=>{
+        const n=parseInt(e.target.value.replace(/[^0-9]/g,''));
+        ocrValues[m][c]=Number.isFinite(n)&&n>=0 ? Math.min(999,n) : 0;
+      });
     });
 
     spinner.classList.remove('on');
@@ -685,6 +731,19 @@ async function runOcr(b64, mime){
   }catch(err){
     spinner.classList.remove('on');
     status.textContent='⚠ 読み取りに失敗しました: '+err.message;
+    // リトライボタンを表示
+    if(!document.getElementById('ocrRetryBtn')){
+      const btn=document.createElement('button');
+      btn.id='ocrRetryBtn';
+      btn.textContent='🔄 再読み取り';
+      btn.style.cssText='margin-top:8px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;';
+      btn.onclick=()=>{
+        btn.remove();
+        // 同じ画像で再試行（scanInputをトリガー）
+        document.getElementById('scanInput').click();
+      };
+      document.querySelector('.ocr-status').after(btn);
+    }
   }
 }
 
@@ -704,6 +763,7 @@ function closeOcr(){
   document.getElementById('ocrApply').disabled=true;
   document.getElementById('ocrSpinner').classList.remove('on');
   document.getElementById('ocrStatusText').textContent='';
+  const retry=document.getElementById('ocrRetryBtn'); if(retry) retry.remove();
 }
 
 // ══ ユーティリティ ══
@@ -711,8 +771,16 @@ function ceil10(n){return n<=0?0:Math.ceil(n/10)*10;}
 function fmt(n){return n.toLocaleString('ja-JP');}
 function curVal(c,m){return Math.max(0,parseInt(document.getElementById(`c${c}m${m}`).value)||0);}
 function reqVal(c){
-  if(isHoliday) return Math.max(0,+document.getElementById(`h${c}`).value||0);
-  return Math.max(0,+document.getElementById(`n${c}d${selDay}`).value||0);
+  if(isHoliday){
+    const el=document.getElementById(`h${c}`);
+    if(!el) return DEF_HOL[c];
+    const v=parseInt(el.value);
+    return Number.isFinite(v) ? Math.max(0,v) : DEF_HOL[c];
+  }
+  const el=document.getElementById(`n${c}d${selDay}`);
+  if(!el) return DEF_DAY[c][selDay];
+  const v=parseInt(el.value);
+  return Number.isFinite(v) ? Math.max(0,v) : DEF_DAY[c][selDay];
 }
 
 // ══ 計算 ══
@@ -722,6 +790,7 @@ function calculate(){
   // 有効な台のインデックス一覧
   const activeMachs = [...Array(MACH)].map((_,i)=>i).filter(i=>enabled[i]);
   const activeMach  = activeMachs.length;
+  if(activeMach === 0){ alert('有効な釣銭機が選択されていません。'); return; }
 
   const cur={},req={},sh={},add={};
   COINS.forEach(c=>{
@@ -732,11 +801,18 @@ function calculate(){
   });
   // 50の倍数調整（有効台のみ対象）
   COINS.forEach(c=>{
+    // 不足ゼロなら調整不要
+    const totalShortage=activeMachs.reduce((s,m)=>s+sh[c][m],0);
+    if(totalShortage===0) return;
     let tot=activeMachs.reduce((s,m)=>s+add[c][m],0);
     const rem=tot%50; if(rem===0) return;
     let need=50-rem;
-    const ord=[...activeMachs].sort((a,b)=>sh[c][b]-sh[c][a]);
-    let i=0; while(need>0){add[c][ord[i%activeMach]]+=10;need-=10;i++;}
+    // 優先順：① すでに補充が入った台（不足あり台）を不足量の大きい順
+    //         ② 補充なし台（不足ゼロ台）を均等に
+    const withAdd    = [...activeMachs].filter(m=>add[c][m]>0).sort((a,b)=>sh[c][b]-sh[c][a]);
+    const withoutAdd = [...activeMachs].filter(m=>add[c][m]===0);
+    const targets    = [...withAdd, ...withoutAdd];
+    let i=0; while(need>0){add[c][targets[i%targets.length]]+=10;need-=10;i++;}
   });
   const after={};
   COINS.forEach(c=>{after[c]=cur[c].map((v,m)=>enabled[m]?v+add[c][m]:v);});
@@ -812,7 +888,16 @@ function calculate(){
   document.getElementById('result').style.display='block';
   document.getElementById('calcBtn').style.display='none';
   document.getElementById('result').scrollIntoView({behavior:'smooth'});
+
 }
+
+// ══ calcBtn 初期状態 ══
+(function(){
+  const arr=getMachEnabled();
+  const anyOn=arr.some(Boolean);
+  const cb=document.getElementById('calcBtn');
+  cb.disabled=!anyOn; cb.style.opacity=anyOn?'':'0.45';
+})();
 
 // ══ イベント登録 ══
 document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b)setDay(+b.dataset.d);});
