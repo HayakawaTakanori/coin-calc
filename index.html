@@ -10,14 +10,14 @@
 <meta name="theme-color" content="#1a2340">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjQwIiBmaWxsPSIjMWEyMzQwIi8+PHRleHQgeD0iOTYiIHk9IjExNSIgZm9udC1zaXplPSI5NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiPuKanTwvdGV4dD48L3N2Zz4=">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono:wght@400;500&display=swap');
 :root {
   --bg:#f4f5f7; --white:#fff; --border:#d0d4dc; --border2:#b8bcc8;
   --hdr:#1a2340; --accent:#1a5fd4; --ok:#1a7a45; --ok-bg:#e6f4ec;
   --danger:#c0192b; --danger-bg:#fdecea; --amber:#b45309; --amber-bg:#fef3c7;
   --blue-bg:#eff6ff; --text:#111827; --text2:#374151; --muted:#6b7280;
   --hol:#c0192b; --hol-bg:#fdecea;
-  --sans:'Noto Sans JP',sans-serif; --mono:'DM Mono','SF Mono',monospace;
+  --sans:'BIZ UDPGothic','Hiragino Sans','Yu Gothic UI',sans-serif; --mono:'Noto Sans Mono','SF Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding-bottom:48px;font-size:15px;line-height:1.5;}
@@ -130,6 +130,12 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
 .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2340;color:#fff;font-family:var(--sans);font-size:14px;font-weight:600;padding:12px 24px;border-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;white-space:nowrap;z-index:3000;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .toast.err{background:var(--danger);}
+/* 編集モード切り替えボタン */
+.edit-toggle-btn{padding:7px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--white);color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+.edit-toggle-btn.editing{background:var(--ok);border-color:var(--ok);color:#fff;}
+.edit-toggle-btn:active{opacity:.75;}
+/* 読み取り専用モードの入力欄 */
+input.min-inp[readonly]{background:#f4f5f7;color:var(--text2);border-color:var(--border);cursor:default;pointer-events:none;}
 .confirm-overlay{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:24px;}
 .confirm-overlay.show{display:flex;}
 .confirm-dialog{background:var(--white);border-radius:16px;width:100%;max-width:320px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);}
@@ -319,7 +325,10 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
   </div>
 
   <div class="sec">曜日別 最低必要枚数（1機あたり）</div>
-  <p class="settings-note">補充後に各機が保持すべき最低枚数です。</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <p class="settings-note" style="margin:0;">補充後に各機が保持すべき最低枚数です。</p>
+    <button class="edit-toggle-btn" id="minEditBtn">✏️ 編集する</button>
+  </div>
   <div class="card scroll-x">
     <table><thead id="minThead"></thead><tbody id="minTbody"></tbody></table>
   </div>
@@ -379,7 +388,7 @@ let ocrValues = {}; // {machIdx: {coin: val}}
 
 // ══ localStorage ラッパー ══
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
-function lsSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+function lsSet(k,v){ try{if(v===null||v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){} }
 
 function getMachNames(){
   try{
@@ -532,10 +541,9 @@ function buildMinTable(){
   DAY_ORDER.forEach(d=>{
     const tr=document.createElement('tr');
     let h=`<td>${DAY_LABEL[d]}曜日</td>`;
-    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${getMinVal(c,d)}" inputmode="numeric"></td>`; });
+    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${getMinVal(c,d)}" inputmode="numeric" readonly></td>`; });
     tr.innerHTML=h; tb.appendChild(tr);
   });
-  // 変更のたびに自動保存
   tb.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
 }
 function buildHolTable(){
@@ -543,10 +551,27 @@ function buildHolTable(){
   const tb=document.getElementById('holTbody'); tb.innerHTML='';
   const tr=document.createElement('tr');
   let h=`<td>休日</td>`;
-  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${getHolVal(c)}" inputmode="numeric"></td>`; });
+  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${getHolVal(c)}" inputmode="numeric" readonly></td>`; });
   tr.innerHTML=h; tb.appendChild(tr);
-  // 変更のたびに自動保存
   tr.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
+}
+
+// 編集モード切り替え
+let minEditing = false;
+function setMinEditMode(on){
+  minEditing = on;
+  const btn = document.getElementById('minEditBtn');
+  btn.textContent = on ? '✓ 完了' : '✏️ 編集する';
+  btn.classList.toggle('editing', on);
+  const inputs = [
+    ...document.querySelectorAll('#minTbody input'),
+    ...document.querySelectorAll('#holTbody input'),
+  ];
+  inputs.forEach(inp => {
+    if(on) inp.removeAttribute('readonly');
+    else   inp.setAttribute('readonly','');
+  });
+  if(!on) saveMinSettings();
 }
 
 // ══ 号機名入力欄 ══
@@ -666,6 +691,8 @@ function compressImage(dataUrl, maxSize=1600, quality=0.82){
 
 function openOcr(file){
   ocrValues={};
+  // 前回のリトライボタンが残っていれば削除
+  const prevRetry=document.getElementById('ocrRetryBtn'); if(prevRetry) prevRetry.remove();
   const overlay=document.getElementById('ocrOverlay');
   const preview=document.getElementById('ocrPreview');
   const spinner=document.getElementById('ocrSpinner');
@@ -687,6 +714,9 @@ function openOcr(file){
 }
 
 async function runOcr(b64, mime){
+  // 再試行用に引数を保持
+  runOcr._lastB64  = b64;
+  runOcr._lastMime = mime;
   const spinner=document.getElementById('ocrSpinner');
   const status=document.getElementById('ocrStatusText');
   const resultW=document.getElementById('ocrResultWrap');
@@ -784,8 +814,12 @@ async function runOcr(b64, mime){
       btn.style.cssText='margin-top:8px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;';
       btn.onclick=()=>{
         btn.remove();
-        // 同じ画像で再試行（scanInputをトリガー）
-        document.getElementById('scanInput').click();
+        // 保存済みの画像データで再試行
+        if(runOcr._lastB64){
+          spinner.classList.add('on');
+          status.textContent='AIが画像を解析しています...';
+          runOcr(runOcr._lastB64, runOcr._lastMime||'image/jpeg');
+        }
       };
       document.querySelector('.ocr-status').after(btn);
     }
@@ -967,6 +1001,7 @@ document.getElementById('daySelector').addEventListener('click',e=>{const b=e.ta
 document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();showCalcBtn();});
 document.getElementById('calcBtn').addEventListener('click',calculate);
 document.getElementById('resetBtn').addEventListener('click',()=>{document.getElementById('result').style.display='none';document.getElementById('calcBtn').style.display='block';window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById('minEditBtn').addEventListener('click',()=>setMinEditMode(!minEditing));
 document.getElementById('exportBtn').addEventListener('click',exportSettings);
 document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change',importSettings);
@@ -996,11 +1031,17 @@ document.getElementById('ocrOverlay').addEventListener('click',e=>{if(e.target==
     if(s){
       const data=JSON.parse(s);
       let broken=false;
-      COINS.forEach(c=>{
-        for(let d=0;d<7;d++){
-          if(data.days?.[c]?.[d]===0) broken=true;
-        }
-      });
+      // days・holidayキーが存在するか、coin種別・曜日のキーが揃っているかだけチェック
+      if(!data.days||!data.holiday) broken=true;
+      else{
+        COINS.forEach(c=>{
+          if(!data.days[c]) broken=true;
+          for(let d=0;d<7;d++){
+            if(data.days[c]?.[d]===undefined||data.days[c]?.[d]===null) broken=true;
+          }
+          if(data.holiday[c]===undefined||data.holiday[c]===null) broken=true;
+        });
+      }
       if(broken){ lsSet(SETTINGS_STORE,null); }
     }
   }catch(e){ lsSet(SETTINGS_STORE,null); }
