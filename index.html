@@ -510,8 +510,14 @@ function saveMinSettings(){
   const data = { days:{}, holiday:{} };
   COINS.forEach(c=>{
     data.days[c]={};
-    for(let d=0;d<7;d++){ const el=document.getElementById(`n${c}d${d}`); data.days[c][d]=el?+el.value:DEF_DAY[c][d]; }
-    const hEl=document.getElementById(`h${c}`); data.holiday[c]=hEl?+hEl.value:DEF_HOL[c];
+    for(let d=0;d<7;d++){
+      const el=document.getElementById(`n${c}d${d}`);
+      const v=el?parseInt(el.value):NaN;
+      data.days[c][d] = (Number.isFinite(v)&&v>=0) ? v : DEF_DAY[c][d];
+    }
+    const hEl=document.getElementById(`h${c}`);
+    const hv=hEl?parseInt(hEl.value):NaN;
+    data.holiday[c] = (Number.isFinite(hv)&&hv>=0) ? hv : DEF_HOL[c];
   });
   lsSet(SETTINGS_STORE, JSON.stringify(data));
 }
@@ -960,6 +966,22 @@ document.getElementById('ocrCancel').addEventListener('click',closeOcr);
 document.getElementById('ocrOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ocrOverlay'))closeOcr();});
 
 // ══ 初期化 ══
+// localStorage の最低必要枚数が0で壊れていたらデフォルトにリセット
+(function(){
+  try{
+    const s=lsGet(SETTINGS_STORE);
+    if(s){
+      const data=JSON.parse(s);
+      let broken=false;
+      COINS.forEach(c=>{
+        for(let d=0;d<7;d++){
+          if(data.days?.[c]?.[d]===0) broken=true;
+        }
+      });
+      if(broken){ lsSet(SETTINGS_STORE,null); }
+    }
+  }catch(e){ lsSet(SETTINGS_STORE,null); }
+})();
 buildCurTable();
 buildMinTable();
 buildHolTable();
