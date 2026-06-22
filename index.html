@@ -477,6 +477,7 @@ function buildCurTable(){
     inp.addEventListener('input',()=>{
       inp.value=inp.value.replace(/[^0-9]/g,'');
       if(inp.value!=='' && +inp.value>999) inp.value='999';
+      showCalcBtn();
     });
     inp.addEventListener('paste',e=>{
       e.preventDefault();
@@ -938,8 +939,15 @@ function calculate(){
 })();
 
 // ══ イベント登録 ══
-document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b) setDay(+b.dataset.d);});
-document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();});
+// 結果表示中なら計算ボタンを再表示（再計算を促す）
+function showCalcBtn(){
+  if(document.getElementById('result').style.display==='block'){
+    document.getElementById('calcBtn').style.display='block';
+  }
+}
+
+document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b){setDay(+b.dataset.d);showCalcBtn();}});
+document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();showCalcBtn();});
 document.getElementById('calcBtn').addEventListener('click',calculate);
 document.getElementById('resetBtn').addEventListener('click',()=>{document.getElementById('result').style.display='none';document.getElementById('calcBtn').style.display='block';window.scrollTo({top:0,behavior:'smooth'});});
 document.getElementById('exportBtn').addEventListener('click',exportSettings);
