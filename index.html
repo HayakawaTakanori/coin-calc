@@ -469,6 +469,7 @@ function buildCurTable(){
       const cb = document.getElementById('calcBtn');
       cb.disabled = !anyOn;
       cb.style.opacity = anyOn ? '' : '0.45';
+      autoCalc();
     });
   });
   // 入力イベント
@@ -890,9 +891,14 @@ function calculate(){
     tr.innerHTML=`<td>${label}</td>`+cells+extraCells; return tr;
   };
 
-  // 補充枚数
-  document.getElementById('addThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'補充金額'}]);
-  const addBody=document.getElementById('addTbody'); addBody.innerHTML='';
+  // 補充枚数（theadは初回のみ設定、tbodyは毎回クリア再描画）
+  const addThead=document.getElementById('addThead');
+  if(!addThead.dataset.built){
+    addThead.innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'補充金額'}]);
+    addThead.dataset.built='1';
+  }
+  const addBody=document.getElementById('addTbody');
+  addBody.innerHTML='';
   for(let m=0;m<MACH;m++){
     if(!enabled[m]) continue;
     addBody.appendChild(mkRow(names[m],
@@ -906,15 +912,18 @@ function calculate(){
   // 本数行（全台合計÷50）
   const rollTr=document.createElement('tr'); rollTr.className='roll-row';
   rollTr.innerHTML=`<td>必要本数</td>`+
-    COINS.map(c=>{
-      const rolls=addCt[c]/50;
-      return `<td class="roll-cell">${rolls>0?rolls+'本':'—'}</td>`;
-    }).join('')+`<td class="roll-cell">&nbsp;</td><td class="roll-cell">&nbsp;</td>`;
+    COINS.map(c=>{const rolls=addCt[c]/50;return `<td class="roll-cell">${rolls>0?rolls+'本':'—'}</td>`;}).join('')+
+    `<td class="roll-cell">&nbsp;</td><td class="roll-cell">&nbsp;</td>`;
   addBody.appendChild(rollTr);
 
-  // 補充後
-  document.getElementById('afterThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'合計金額'}]);
-  const afterBody=document.getElementById('afterTbody'); afterBody.innerHTML='';
+  // 補充後（同様にtheadは初回のみ）
+  const afterThead=document.getElementById('afterThead');
+  if(!afterThead.dataset.built){
+    afterThead.innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'合計金額'}]);
+    afterThead.dataset.built='1';
+  }
+  const afterBody=document.getElementById('afterTbody');
+  afterBody.innerHTML='';
   for(let m=0;m<MACH;m++){
     if(!enabled[m]) continue;
     afterBody.appendChild(mkRow(names[m],
@@ -925,13 +934,15 @@ function calculate(){
   aftTr.innerHTML=`<td>全台合計</td>`+COINS.map(c=>{const t=activeMachs.reduce((s,m)=>s+after[c][m],0);return `<td>${fmt(t)}</td>`;}).join('')+`<td>${fmt(grandAfter)}</td><td class="c-amt">¥${fmt(grandAmt)}</td>`;
   afterBody.appendChild(aftTr);
 
+  // 初回のみ結果を表示してスクロール、autoCalc時はスクロールしない
+  const wasHidden = document.getElementById('result').style.display !== 'block';
   document.getElementById('result').style.display='block';
   document.getElementById('calcBtn').style.display='none';
-  document.getElementById('result').scrollIntoView({behavior:'smooth'});
-
+  if(wasHidden) document.getElementById('result').scrollIntoView({behavior:'smooth'});
 }
 
-// ══ calcBtn 初期状態 ══
+function isResultVisible(){ return document.getElementById('result').style.display==='block'; }
+function autoCalc(){ if(isResultVisible()) calculate(); }
 (function(){
   const arr=getMachEnabled();
   const anyOn=arr.some(Boolean);
@@ -940,10 +951,17 @@ function calculate(){
 })();
 
 // ══ イベント登録 ══
-document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b)setDay(+b.dataset.d);});
-document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();});
+document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b){setDay(+b.dataset.d);autoCalc();}});
+document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();autoCalc();});
 document.getElementById('calcBtn').addEventListener('click',calculate);
-document.getElementById('resetBtn').addEventListener('click',()=>{document.getElementById('result').style.display='none';document.getElementById('calcBtn').style.display='block';window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  document.getElementById('result').style.display='none';
+  document.getElementById('calcBtn').style.display='block';
+  // thead再構築フラグをリセット
+  delete document.getElementById('addThead').dataset.built;
+  delete document.getElementById('afterThead').dataset.built;
+  window.scrollTo({top:0,behavior:'smooth'});
+});
 document.getElementById('exportBtn').addEventListener('click',exportSettings);
 document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change',importSettings);
