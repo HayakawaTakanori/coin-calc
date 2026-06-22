@@ -126,7 +126,10 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
 .clear-btn:hover{border-color:var(--danger);color:var(--danger);}
 .clear-btn:active{opacity:.75;}
 
-/* 確認ダイアログ */
+/* トースト通知 */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2340;color:#fff;font-family:var(--sans);font-size:14px;font-weight:600;padding:12px 24px;border-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;white-space:nowrap;z-index:3000;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.err{background:var(--danger);}
 .confirm-overlay{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:24px;}
 .confirm-overlay.show{display:flex;}
 .confirm-dialog{background:var(--white);border-radius:16px;width:100%;max-width:320px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);}
@@ -627,8 +630,9 @@ function importSettings(e){
         buildMachNames(); buildCurTable();
       }
       saveMinSettings(); // インポート後も即保存
-      alert('設定をインポートしました。');
-    }catch(err){ alert('インポートに失敗しました: '+err.message); }
+      showCalcBtn();     // 再計算を促す
+      showToast('設定をインポートしました');
+    }catch(err){ showToast('インポートに失敗しました: '+err.message, true); }
     e.target.value='';
   };
   reader.readAsText(file);
@@ -944,6 +948,17 @@ function showCalcBtn(){
   if(document.getElementById('result').style.display==='block'){
     document.getElementById('calcBtn').style.display='block';
   }
+}
+
+// トースト通知
+function showToast(msg, isErr=false){
+  let el=document.getElementById('toastEl');
+  if(!el){ el=document.createElement('div'); el.id='toastEl'; el.className='toast'; document.body.appendChild(el); }
+  el.textContent=msg;
+  el.classList.toggle('err', isErr);
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'), 2500);
 }
 
 document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b){setDay(+b.dataset.d);showCalcBtn();}});
