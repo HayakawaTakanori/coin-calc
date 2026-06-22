@@ -800,6 +800,8 @@ function applyOcr(){
     el.value=String(v); el.classList.toggle('zero',v===0);
   });
   closeOcr();
+  showCalcBtn();   // 再計算を促す
+  showToast('値を反映しました。計算ボタンを押してください');
 }
 function closeOcr(){
   document.getElementById('ocrOverlay').classList.remove('show');
