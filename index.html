@@ -10,14 +10,14 @@
 <meta name="theme-color" content="#1a2340">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj48cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjQwIiBmaWxsPSIjMWEyMzQwIi8+PHRleHQgeD0iOTYiIHk9IjExNSIgZm9udC1zaXplPSI5NiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiPuKanTwvdGV4dD48L3N2Zz4=">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Noto+Sans+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
 :root {
   --bg:#f4f5f7; --white:#fff; --border:#d0d4dc; --border2:#b8bcc8;
   --hdr:#1a2340; --accent:#1a5fd4; --ok:#1a7a45; --ok-bg:#e6f4ec;
   --danger:#c0192b; --danger-bg:#fdecea; --amber:#b45309; --amber-bg:#fef3c7;
   --blue-bg:#eff6ff; --text:#111827; --text2:#374151; --muted:#6b7280;
   --hol:#c0192b; --hol-bg:#fdecea;
-  --sans:'BIZ UDPGothic','Hiragino Sans','Yu Gothic UI',sans-serif; --mono:'Noto Sans Mono','SF Mono',monospace;
+  --sans:'Noto Sans JP',sans-serif; --mono:'DM Mono','SF Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding-bottom:48px;font-size:15px;line-height:1.5;}
@@ -357,6 +357,43 @@ input.min-inp[readonly]{background:#f4f5f7;color:var(--text2);border-color:var(-
       <button class="apikey-save" id="apiKeySaveBtn">保存</button>
     </div>
     <div id="apiKeyStatus" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+    <!-- モデル名設定 -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <p class="settings-note" style="margin-bottom:8px;">
+        AIモデル名（動作しなくなった場合に変更）<br>
+        最新モデル名：<strong>console.anthropic.com</strong> → Models で確認できます。
+      </p>
+      <div class="apikey-row">
+        <input type="text" id="modelInput" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false" style="font-family:var(--mono);font-size:13px;">
+        <button class="apikey-save" id="modelSaveBtn">保存</button>
+      </div>
+      <div id="modelStatus" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+    </div>
+  </div>
+
+  <!-- デバッグ情報 -->
+  <div class="sec" style="margin-top:20px;">🔧 デバッグ情報</div>
+  <div class="card" style="padding:14px;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;width:40%;">ビルド日付</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgBuild">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">使用AIモデル</td>
+          <td style="padding:8px 4px;font-family:var(--mono);word-break:break-all;" id="dbgModel">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">モデルソース</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgModelSrc">—</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">APIキー</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgApiKey">—</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
 </main>
@@ -368,8 +405,11 @@ const COINS     = [500,100,50,10,5,1];
 const DAY_ORDER = [1,2,3,4,5,6,0];
 const DAY_LABEL = ['日','月','火','水','木','金','土'];
 const API_KEY_STORE  = 'coin_api_key';
+const MODEL_STORE    = 'coin_model';
+const DEF_MODEL      = 'claude-sonnet-4-6';
 const MACH_NAME_STORE = 'coin_mach_names';
 const SETTINGS_STORE  = 'coin_settings';
+const BUILD_DATE     = '2026-08-13';
 
 // 台数は5台固定
 const MACH = 5;
@@ -388,7 +428,7 @@ let ocrValues = {}; // {machIdx: {coin: val}}
 
 // ══ localStorage ラッパー ══
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
-function lsSet(k,v){ try{if(v===null||v===undefined)localStorage.removeItem(k);else localStorage.setItem(k,v);}catch(e){} }
+function lsSet(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
 
 function getMachNames(){
   try{
@@ -407,12 +447,26 @@ function saveMachNames(){
 }
 
 // ══ タブ ══
+function updateDebugInfo(){
+  const el=id=>document.getElementById(id);
+  if(!el('dbgBuild')) return;
+  el('dbgBuild').textContent  = BUILD_DATE;
+  el('dbgModel').textContent  = getModel();
+  const lsModel=lsGet(MODEL_STORE);
+  el('dbgModelSrc').textContent = lsModel ? 'localStorage（自動更新済）' : 'デフォルト値';
+  const key=getApiKey();
+  el('dbgApiKey').textContent = key
+    ? key.slice(0,12)+'…'+key.slice(-4)+' (設定済)'
+    : '未設定';
+}
+
 document.querySelector('.tab-bar').addEventListener('click', e=>{
   const btn = e.target.closest('.tab-btn'); if(!btn) return;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('page-'+btn.dataset.tab).classList.add('active');
+  if(btn.dataset.tab==='settings') updateDebugInfo();
 });
 
 // ══ 硬貨列ヘッダー ══
@@ -609,10 +663,47 @@ function getApiKey(){
   // 優先順位: localStorage → コード内の固定値
   return lsGet(API_KEY_STORE) || HARDCODED_API_KEY || '';
 }
+function getModel(){
+  return lsGet(MODEL_STORE) || DEF_MODEL;
+}
+
+// /v1/models から最新のhaiku/sonnetモデルを自動取得
+async function fetchLatestModel(apiKey){
+  if(!apiKey) return null;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/models',{
+      headers:{
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      }
+    });
+    if(!res.ok) return null;
+    const data=await res.json();
+    const ids=(data.data||[]).map(m=>m.id).filter(id=>/claude-sonnet/.test(id));
+    return ids.sort().reverse()[0]||null;
+  }catch(e){ return null; }
+}
+
+async function autoUpdateModel(apiKey){
+  const latest=await fetchLatestModel(apiKey);
+  if(!latest) return;
+  const current=getModel();
+  if(latest===current) return;
+  lsSet(MODEL_STORE,latest);
+  // UI更新
+  const inp=document.getElementById('modelInput');
+  const sta=document.getElementById('modelStatus');
+  if(inp) inp.value=latest;
+  if(sta){ sta.textContent=`🔄 自動更新: ${latest}`; sta.style.color='var(--ok)'; }
+  showToast(`AIモデルを自動更新しました`);
+  updateDebugInfo();
+}
+
 function initApiKeyUI(){
   const input=document.getElementById('apiKeyInput');
   const status=document.getElementById('apiKeyStatus');
-  const lsKey = lsGet(API_KEY_STORE)||'';
+  const lsKey=lsGet(API_KEY_STORE)||'';
   if(lsKey){
     input.value=lsKey;
     status.textContent='✓ APIキーが保存されています'; status.style.color='var(--ok)';
@@ -624,7 +715,27 @@ function initApiKeyUI(){
     if(!val.startsWith('sk-ant-')){ status.textContent='⚠ sk-ant- で始まるキーを入力してください'; status.style.color='var(--danger)'; return; }
     lsSet(API_KEY_STORE,val);
     status.textContent='✓ 保存しました'; status.style.color='var(--ok)';
+    autoUpdateModel(val); // APIキー保存時にモデルも自動更新
   });
+}
+
+function initModelUI(){
+  const input=document.getElementById('modelInput');
+  const status=document.getElementById('modelStatus');
+  input.value=getModel();
+  status.textContent=`使用中: ${getModel()}`; status.style.color='var(--muted)';
+  document.getElementById('modelSaveBtn').addEventListener('click',()=>{
+    const val=input.value.trim();
+    if(!val){ status.textContent='⚠ モデル名を入力してください'; status.style.color='var(--danger)'; return; }
+    lsSet(MODEL_STORE,val);
+    status.textContent=`✓ 保存しました（${val}）`; status.style.color='var(--ok)';
+  });
+  // 起動時にAPIキーがあれば自動チェック
+  const key=getApiKey();
+  if(key){
+    status.textContent=`使用中: ${getModel()} （確認中…）`; status.style.color='var(--muted)';
+    autoUpdateModel(key);
+  }
 }
 
 // ══ エクスポート・インポート ══
@@ -691,8 +802,6 @@ function compressImage(dataUrl, maxSize=1600, quality=0.82){
 
 function openOcr(file){
   ocrValues={};
-  // 前回のリトライボタンが残っていれば削除
-  const prevRetry=document.getElementById('ocrRetryBtn'); if(prevRetry) prevRetry.remove();
   const overlay=document.getElementById('ocrOverlay');
   const preview=document.getElementById('ocrPreview');
   const spinner=document.getElementById('ocrSpinner');
@@ -714,9 +823,6 @@ function openOcr(file){
 }
 
 async function runOcr(b64, mime){
-  // 再試行用に引数を保持
-  runOcr._lastB64  = b64;
-  runOcr._lastMime = mime;
   const spinner=document.getElementById('ocrSpinner');
   const status=document.getElementById('ocrStatusText');
   const resultW=document.getElementById('ocrResultWrap');
@@ -745,7 +851,7 @@ async function runOcr(b64, mime){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:600,
+        model:getModel(), max_tokens:600,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:mime,data:b64}},
           {type:'text',text:prompt}
@@ -814,12 +920,8 @@ async function runOcr(b64, mime){
       btn.style.cssText='margin-top:8px;width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;';
       btn.onclick=()=>{
         btn.remove();
-        // 保存済みの画像データで再試行
-        if(runOcr._lastB64){
-          spinner.classList.add('on');
-          status.textContent='AIが画像を解析しています...';
-          runOcr(runOcr._lastB64, runOcr._lastMime||'image/jpeg');
-        }
+        // 同じ画像で再試行（scanInputをトリガー）
+        document.getElementById('scanInput').click();
       };
       document.querySelector('.ocr-status').after(btn);
     }
@@ -1031,17 +1133,11 @@ document.getElementById('ocrOverlay').addEventListener('click',e=>{if(e.target==
     if(s){
       const data=JSON.parse(s);
       let broken=false;
-      // days・holidayキーが存在するか、coin種別・曜日のキーが揃っているかだけチェック
-      if(!data.days||!data.holiday) broken=true;
-      else{
-        COINS.forEach(c=>{
-          if(!data.days[c]) broken=true;
-          for(let d=0;d<7;d++){
-            if(data.days[c]?.[d]===undefined||data.days[c]?.[d]===null) broken=true;
-          }
-          if(data.holiday[c]===undefined||data.holiday[c]===null) broken=true;
-        });
-      }
+      COINS.forEach(c=>{
+        for(let d=0;d<7;d++){
+          if(data.days?.[c]?.[d]===0) broken=true;
+        }
+      });
       if(broken){ lsSet(SETTINGS_STORE,null); }
     }
   }catch(e){ lsSet(SETTINGS_STORE,null); }
@@ -1052,6 +1148,7 @@ buildHolTable();
 buildMachNames();
 setDay(selDay);
 initApiKeyUI();
+initModelUI();
 </script>
 </body>
 </html>
