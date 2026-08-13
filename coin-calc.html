@@ -126,7 +126,16 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
 .clear-btn:hover{border-color:var(--danger);color:var(--danger);}
 .clear-btn:active{opacity:.75;}
 
-/* 確認ダイアログ */
+/* トースト通知 */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a2340;color:#fff;font-family:var(--sans);font-size:14px;font-weight:600;padding:12px 24px;border-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.25s,transform 0.25s;pointer-events:none;white-space:nowrap;z-index:3000;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.err{background:var(--danger);}
+/* 編集モード切り替えボタン */
+.edit-toggle-btn{padding:7px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--white);color:var(--text2);font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;}
+.edit-toggle-btn.editing{background:var(--ok);border-color:var(--ok);color:#fff;}
+.edit-toggle-btn:active{opacity:.75;}
+/* 読み取り専用モードの入力欄 */
+input.min-inp[readonly]{background:#f4f5f7;color:var(--text2);border-color:var(--border);cursor:default;pointer-events:none;}
 .confirm-overlay{display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;padding:24px;}
 .confirm-overlay.show{display:flex;}
 .confirm-dialog{background:var(--white);border-radius:16px;width:100%;max-width:320px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);}
@@ -316,7 +325,10 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
   </div>
 
   <div class="sec">曜日別 最低必要枚数（1機あたり）</div>
-  <p class="settings-note">補充後に各機が保持すべき最低枚数です。</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+    <p class="settings-note" style="margin:0;">補充後に各機が保持すべき最低枚数です。</p>
+    <button class="edit-toggle-btn" id="minEditBtn">✏️ 編集する</button>
+  </div>
   <div class="card scroll-x">
     <table><thead id="minThead"></thead><tbody id="minTbody"></tbody></table>
   </div>
@@ -345,6 +357,43 @@ input.min-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px
       <button class="apikey-save" id="apiKeySaveBtn">保存</button>
     </div>
     <div id="apiKeyStatus" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+    <!-- モデル名設定 -->
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+      <p class="settings-note" style="margin-bottom:8px;">
+        AIモデル名（動作しなくなった場合に変更）<br>
+        最新モデル名：<strong>console.anthropic.com</strong> → Models で確認できます。
+      </p>
+      <div class="apikey-row">
+        <input type="text" id="modelInput" placeholder="claude-haiku-4-5-20251001" autocomplete="off" spellcheck="false" style="font-family:var(--mono);font-size:13px;">
+        <button class="apikey-save" id="modelSaveBtn">保存</button>
+      </div>
+      <div id="modelStatus" style="margin-top:8px;font-size:12px;color:var(--muted);"></div>
+    </div>
+  </div>
+
+  <!-- デバッグ情報 -->
+  <div class="sec" style="margin-top:20px;">🔧 デバッグ情報</div>
+  <div class="card" style="padding:14px;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;width:40%;">ビルド日付</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgBuild">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">使用AIモデル</td>
+          <td style="padding:8px 4px;font-family:var(--mono);word-break:break-all;" id="dbgModel">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">モデルソース</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgModelSrc">—</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 4px;color:var(--muted);font-weight:700;">APIキー</td>
+          <td style="padding:8px 4px;font-family:var(--mono);" id="dbgApiKey">—</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
 </main>
@@ -356,8 +405,11 @@ const COINS     = [500,100,50,10,5,1];
 const DAY_ORDER = [1,2,3,4,5,6,0];
 const DAY_LABEL = ['日','月','火','水','木','金','土'];
 const API_KEY_STORE  = 'coin_api_key';
+const MODEL_STORE    = 'coin_model';
+const DEF_MODEL      = 'claude-sonnet-4-6';
 const MACH_NAME_STORE = 'coin_mach_names';
 const SETTINGS_STORE  = 'coin_settings';
+const BUILD_DATE     = '2026-08-13';
 
 // 台数は5台固定
 const MACH = 5;
@@ -395,12 +447,26 @@ function saveMachNames(){
 }
 
 // ══ タブ ══
+function updateDebugInfo(){
+  const el=id=>document.getElementById(id);
+  if(!el('dbgBuild')) return;
+  el('dbgBuild').textContent  = BUILD_DATE;
+  el('dbgModel').textContent  = getModel();
+  const lsModel=lsGet(MODEL_STORE);
+  el('dbgModelSrc').textContent = lsModel ? 'localStorage（自動更新済）' : 'デフォルト値';
+  const key=getApiKey();
+  el('dbgApiKey').textContent = key
+    ? key.slice(0,12)+'…'+key.slice(-4)+' (設定済)'
+    : '未設定';
+}
+
 document.querySelector('.tab-bar').addEventListener('click', e=>{
   const btn = e.target.closest('.tab-btn'); if(!btn) return;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('page-'+btn.dataset.tab).classList.add('active');
+  if(btn.dataset.tab==='settings') updateDebugInfo();
 });
 
 // ══ 硬貨列ヘッダー ══
@@ -477,6 +543,7 @@ function buildCurTable(){
     inp.addEventListener('input',()=>{
       inp.value=inp.value.replace(/[^0-9]/g,'');
       if(inp.value!=='' && +inp.value>999) inp.value='999';
+      showCalcBtn();
     });
     inp.addEventListener('paste',e=>{
       e.preventDefault();
@@ -510,8 +577,14 @@ function saveMinSettings(){
   const data = { days:{}, holiday:{} };
   COINS.forEach(c=>{
     data.days[c]={};
-    for(let d=0;d<7;d++){ const el=document.getElementById(`n${c}d${d}`); data.days[c][d]=el?+el.value:DEF_DAY[c][d]; }
-    const hEl=document.getElementById(`h${c}`); data.holiday[c]=hEl?+hEl.value:DEF_HOL[c];
+    for(let d=0;d<7;d++){
+      const el=document.getElementById(`n${c}d${d}`);
+      const v=el?parseInt(el.value):NaN;
+      data.days[c][d] = (Number.isFinite(v)&&v>=0) ? v : DEF_DAY[c][d];
+    }
+    const hEl=document.getElementById(`h${c}`);
+    const hv=hEl?parseInt(hEl.value):NaN;
+    data.holiday[c] = (Number.isFinite(hv)&&hv>=0) ? hv : DEF_HOL[c];
   });
   lsSet(SETTINGS_STORE, JSON.stringify(data));
 }
@@ -522,10 +595,9 @@ function buildMinTable(){
   DAY_ORDER.forEach(d=>{
     const tr=document.createElement('tr');
     let h=`<td>${DAY_LABEL[d]}曜日</td>`;
-    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${getMinVal(c,d)}" inputmode="numeric"></td>`; });
+    COINS.forEach(c=>{ h+=`<td><input type="number" class="min-inp" id="n${c}d${d}" min="0" value="${getMinVal(c,d)}" inputmode="numeric" readonly></td>`; });
     tr.innerHTML=h; tb.appendChild(tr);
   });
-  // 変更のたびに自動保存
   tb.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
 }
 function buildHolTable(){
@@ -533,10 +605,27 @@ function buildHolTable(){
   const tb=document.getElementById('holTbody'); tb.innerHTML='';
   const tr=document.createElement('tr');
   let h=`<td>休日</td>`;
-  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${getHolVal(c)}" inputmode="numeric"></td>`; });
+  COINS.forEach(c=>{ h+=`<td class="hol-row-cell"><input type="number" class="min-inp" id="h${c}" min="0" value="${getHolVal(c)}" inputmode="numeric" readonly></td>`; });
   tr.innerHTML=h; tb.appendChild(tr);
-  // 変更のたびに自動保存
   tr.querySelectorAll('input').forEach(inp=>inp.addEventListener('change', saveMinSettings));
+}
+
+// 編集モード切り替え
+let minEditing = false;
+function setMinEditMode(on){
+  minEditing = on;
+  const btn = document.getElementById('minEditBtn');
+  btn.textContent = on ? '✓ 完了' : '✏️ 編集する';
+  btn.classList.toggle('editing', on);
+  const inputs = [
+    ...document.querySelectorAll('#minTbody input'),
+    ...document.querySelectorAll('#holTbody input'),
+  ];
+  inputs.forEach(inp => {
+    if(on) inp.removeAttribute('readonly');
+    else   inp.setAttribute('readonly','');
+  });
+  if(!on) saveMinSettings();
 }
 
 // ══ 号機名入力欄 ══
@@ -574,10 +663,47 @@ function getApiKey(){
   // 優先順位: localStorage → コード内の固定値
   return lsGet(API_KEY_STORE) || HARDCODED_API_KEY || '';
 }
+function getModel(){
+  return lsGet(MODEL_STORE) || DEF_MODEL;
+}
+
+// /v1/models から最新のhaiku/sonnetモデルを自動取得
+async function fetchLatestModel(apiKey){
+  if(!apiKey) return null;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/models',{
+      headers:{
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      }
+    });
+    if(!res.ok) return null;
+    const data=await res.json();
+    const ids=(data.data||[]).map(m=>m.id).filter(id=>/claude-sonnet/.test(id));
+    return ids.sort().reverse()[0]||null;
+  }catch(e){ return null; }
+}
+
+async function autoUpdateModel(apiKey){
+  const latest=await fetchLatestModel(apiKey);
+  if(!latest) return;
+  const current=getModel();
+  if(latest===current) return;
+  lsSet(MODEL_STORE,latest);
+  // UI更新
+  const inp=document.getElementById('modelInput');
+  const sta=document.getElementById('modelStatus');
+  if(inp) inp.value=latest;
+  if(sta){ sta.textContent=`🔄 自動更新: ${latest}`; sta.style.color='var(--ok)'; }
+  showToast(`AIモデルを自動更新しました`);
+  updateDebugInfo();
+}
+
 function initApiKeyUI(){
   const input=document.getElementById('apiKeyInput');
   const status=document.getElementById('apiKeyStatus');
-  const lsKey = lsGet(API_KEY_STORE)||'';
+  const lsKey=lsGet(API_KEY_STORE)||'';
   if(lsKey){
     input.value=lsKey;
     status.textContent='✓ APIキーが保存されています'; status.style.color='var(--ok)';
@@ -589,7 +715,27 @@ function initApiKeyUI(){
     if(!val.startsWith('sk-ant-')){ status.textContent='⚠ sk-ant- で始まるキーを入力してください'; status.style.color='var(--danger)'; return; }
     lsSet(API_KEY_STORE,val);
     status.textContent='✓ 保存しました'; status.style.color='var(--ok)';
+    autoUpdateModel(val); // APIキー保存時にモデルも自動更新
   });
+}
+
+function initModelUI(){
+  const input=document.getElementById('modelInput');
+  const status=document.getElementById('modelStatus');
+  input.value=getModel();
+  status.textContent=`使用中: ${getModel()}`; status.style.color='var(--muted)';
+  document.getElementById('modelSaveBtn').addEventListener('click',()=>{
+    const val=input.value.trim();
+    if(!val){ status.textContent='⚠ モデル名を入力してください'; status.style.color='var(--danger)'; return; }
+    lsSet(MODEL_STORE,val);
+    status.textContent=`✓ 保存しました（${val}）`; status.style.color='var(--ok)';
+  });
+  // 起動時にAPIキーがあれば自動チェック
+  const key=getApiKey();
+  if(key){
+    status.textContent=`使用中: ${getModel()} （確認中…）`; status.style.color='var(--muted)';
+    autoUpdateModel(key);
+  }
 }
 
 // ══ エクスポート・インポート ══
@@ -620,8 +766,9 @@ function importSettings(e){
         buildMachNames(); buildCurTable();
       }
       saveMinSettings(); // インポート後も即保存
-      alert('設定をインポートしました。');
-    }catch(err){ alert('インポートに失敗しました: '+err.message); }
+      showCalcBtn();     // 再計算を促す
+      showToast('設定をインポートしました');
+    }catch(err){ showToast('インポートに失敗しました: '+err.message, true); }
     e.target.value='';
   };
   reader.readAsText(file);
@@ -704,7 +851,7 @@ async function runOcr(b64, mime){
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-6', max_tokens:600,
+        model:getModel(), max_tokens:600,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:mime,data:b64}},
           {type:'text',text:prompt}
@@ -789,6 +936,8 @@ function applyOcr(){
     el.value=String(v); el.classList.toggle('zero',v===0);
   });
   closeOcr();
+  showCalcBtn();   // 再計算を促す
+  showToast('値を反映しました。計算ボタンを押してください');
 }
 function closeOcr(){
   document.getElementById('ocrOverlay').classList.remove('show');
@@ -886,7 +1035,8 @@ function calculate(){
 
   // 補充枚数
   document.getElementById('addThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'補充金額'}]);
-  const addBody=document.getElementById('addTbody'); addBody.innerHTML='';
+  const addBody=document.getElementById('addTbody');
+  addBody.innerHTML='';
   for(let m=0;m<MACH;m++){
     if(!enabled[m]) continue;
     addBody.appendChild(mkRow(names[m],
@@ -900,15 +1050,14 @@ function calculate(){
   // 本数行（全台合計÷50）
   const rollTr=document.createElement('tr'); rollTr.className='roll-row';
   rollTr.innerHTML=`<td>必要本数</td>`+
-    COINS.map(c=>{
-      const rolls=addCt[c]/50;
-      return `<td class="roll-cell">${rolls>0?rolls+'本':'—'}</td>`;
-    }).join('')+`<td class="roll-cell">&nbsp;</td><td class="roll-cell">&nbsp;</td>`;
+    COINS.map(c=>{const rolls=addCt[c]/50;return `<td class="roll-cell">${rolls>0?rolls+'本':'—'}</td>`;}).join('')+
+    `<td class="roll-cell">&nbsp;</td><td class="roll-cell">&nbsp;</td>`;
   addBody.appendChild(rollTr);
 
   // 補充後
   document.getElementById('afterThead').innerHTML=mkHead([{cls:'total-hd',label:'合計枚数'},{cls:'amt-hd',label:'合計金額'}]);
-  const afterBody=document.getElementById('afterTbody'); afterBody.innerHTML='';
+  const afterBody=document.getElementById('afterTbody');
+  afterBody.innerHTML='';
   for(let m=0;m<MACH;m++){
     if(!enabled[m]) continue;
     afterBody.appendChild(mkRow(names[m],
@@ -922,10 +1071,8 @@ function calculate(){
   document.getElementById('result').style.display='block';
   document.getElementById('calcBtn').style.display='none';
   document.getElementById('result').scrollIntoView({behavior:'smooth'});
-
 }
 
-// ══ calcBtn 初期状態 ══
 (function(){
   const arr=getMachEnabled();
   const anyOn=arr.some(Boolean);
@@ -934,10 +1081,29 @@ function calculate(){
 })();
 
 // ══ イベント登録 ══
-document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b)setDay(+b.dataset.d);});
-document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();});
+// 結果表示中なら計算ボタンを再表示（再計算を促す）
+function showCalcBtn(){
+  if(document.getElementById('result').style.display==='block'){
+    document.getElementById('calcBtn').style.display='block';
+  }
+}
+
+// トースト通知
+function showToast(msg, isErr=false){
+  let el=document.getElementById('toastEl');
+  if(!el){ el=document.createElement('div'); el.id='toastEl'; el.className='toast'; document.body.appendChild(el); }
+  el.textContent=msg;
+  el.classList.toggle('err', isErr);
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.classList.remove('show'), 2500);
+}
+
+document.getElementById('daySelector').addEventListener('click',e=>{const b=e.target.closest('.day-btn');if(b){setDay(+b.dataset.d);showCalcBtn();}});
+document.getElementById('holToggle').addEventListener('click',()=>{isHoliday=!isHoliday;document.getElementById('holToggle').classList.toggle('on',isHoliday);document.getElementById('holChkBox').textContent=isHoliday?'✓':'';updateBadge();showCalcBtn();});
 document.getElementById('calcBtn').addEventListener('click',calculate);
 document.getElementById('resetBtn').addEventListener('click',()=>{document.getElementById('result').style.display='none';document.getElementById('calcBtn').style.display='block';window.scrollTo({top:0,behavior:'smooth'});});
+document.getElementById('minEditBtn').addEventListener('click',()=>setMinEditMode(!minEditing));
 document.getElementById('exportBtn').addEventListener('click',exportSettings);
 document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
 document.getElementById('importFile').addEventListener('change',importSettings);
@@ -960,12 +1126,29 @@ document.getElementById('ocrCancel').addEventListener('click',closeOcr);
 document.getElementById('ocrOverlay').addEventListener('click',e=>{if(e.target===document.getElementById('ocrOverlay'))closeOcr();});
 
 // ══ 初期化 ══
+// localStorage の最低必要枚数が0で壊れていたらデフォルトにリセット
+(function(){
+  try{
+    const s=lsGet(SETTINGS_STORE);
+    if(s){
+      const data=JSON.parse(s);
+      let broken=false;
+      COINS.forEach(c=>{
+        for(let d=0;d<7;d++){
+          if(data.days?.[c]?.[d]===0) broken=true;
+        }
+      });
+      if(broken){ lsSet(SETTINGS_STORE,null); }
+    }
+  }catch(e){ lsSet(SETTINGS_STORE,null); }
+})();
 buildCurTable();
 buildMinTable();
 buildHolTable();
 buildMachNames();
 setDay(selDay);
 initApiKeyUI();
+initModelUI();
 </script>
 </body>
 </html>
